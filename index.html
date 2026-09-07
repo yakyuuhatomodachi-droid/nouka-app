@@ -209,6 +209,8 @@
   .cust-table .cust-total-cell { position: sticky; right: 0; background: var(--surface); font-weight: 500; z-index: 1; }
   .cust-table th.cust-total-cell { background: var(--bg); z-index: 2; }
   .cust-table .day-cell-content { font-size: 11px; line-height: 1.4; }
+  .cust-cell-clickable { cursor: pointer; }
+  .cust-cell-clickable:hover { background: var(--accent-light); }
 
   .month-table { border-collapse: collapse; font-size: 12px; min-width: 700px; width: 100%; table-layout: fixed; }
   .month-table th { border: 1px solid var(--border); padding: 6px 8px; background: var(--bg); font-size: 12px; font-weight: 500; color: var(--text-secondary); text-align: left; }
@@ -2807,8 +2809,8 @@ function renderCustomerCalendarTable() {
       const isToday = d === todayStrVal;
       const isFixedDay = fixedDays.includes(weekdayOf(d));
       const content = entries.map(e => `<div class="day-cell-content">${escapeHtml(e.item)} ${e.qty}${escapeHtml(e.unit)}${e.pieces !== null ? `(${e.pieces}個)` : ''}</div>`).join('');
-      const classes = [isFixedDay ? 'fixed-day-col' : '', isToday ? 'today-col' : ''].filter(Boolean).join(' ');
-      html += `<td class="${classes}">${content}</td>`;
+      const classes = [isFixedDay ? 'fixed-day-col' : '', isToday ? 'today-col' : '', 'cust-cell-clickable'].filter(Boolean).join(' ');
+      html += `<td class="${classes}" data-cust="${c.id}" data-date="${d}">${content}</td>`;
     });
     const t = totals[c.id] || { pieces: 0, amount: 0 };
     html += `<td class="cust-total-cell">${t.pieces > 0 ? t.pieces + '個' : ''}<br>${yen(t.amount)}</td>`;
@@ -2819,6 +2821,19 @@ function renderCustomerCalendarTable() {
   wrap.querySelectorAll('.cust-order-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const custId = btn.dataset.cust;
+      document.querySelector('.tab-btn[data-tab="orders"]').click();
+      document.getElementById('o-customer').value = custId;
+      updateOrderItemOptions();
+      applyPendingShipDate();
+      updateShipDatePreview();
+      updatePricePreview();
+      document.getElementById('o-customer').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  });
+  wrap.querySelectorAll('.cust-cell-clickable').forEach(td => {
+    td.addEventListener('click', () => {
+      const custId = td.dataset.cust;
+      pendingShipDate = td.dataset.date;
       document.querySelector('.tab-btn[data-tab="orders"]').click();
       document.getElementById('o-customer').value = custId;
       updateOrderItemOptions();
