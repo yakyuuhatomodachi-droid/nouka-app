@@ -195,8 +195,10 @@
   .calendar-wrap { overflow-x: auto; overflow-y: visible; margin: 0 -4px; padding: 0 4px; }
   .cal-view-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
-  .cust-table { border-collapse: collapse; font-size: 12px; min-width: 100%; table-layout: fixed; }
-  .cust-table th, .cust-table td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; white-space: nowrap; }
+  .cust-table { border-collapse: separate; border-spacing: 0; font-size: 12px; min-width: 100%; table-layout: fixed; }
+  .cust-table th, .cust-table td { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 6px 8px; text-align: left; white-space: nowrap; }
+  .cust-table th:first-child, .cust-table td:first-child { border-left: 1px solid var(--border); }
+  .cust-table thead th { border-top: 1px solid var(--border); }
   .cust-table td:not(.cust-name-cell):not(.cust-total-cell),
   .cust-table th:not(.cust-name-cell):not(.cust-total-cell) {
     width: 130px;
