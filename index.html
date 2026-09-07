@@ -2977,7 +2977,7 @@ function openCustCellModal(custId, dateStr) {
   });
 
   const body = document.getElementById('cust-cell-modal-body');
-  body.innerHTML = existingOrders.length === 0
+  const itemsHtml = existingOrders.length === 0
     ? '<div class="empty-state">この日はまだ注文がありません</div>'
     : existingOrders.map(o => {
         const pieces = getPieceCount(o.qty, o.casePack);
@@ -2988,6 +2988,17 @@ function openCustCellModal(custId, dateStr) {
           </div>
         `;
       }).join('');
+
+  body.innerHTML = itemsHtml + (existingOrders.length > 0 ? `
+    <button type="button" class="btn btn-ghost" id="cust-cell-modal-deliverynote-btn" style="width: 100%; margin-top: 10px;">納品書を作成</button>
+  ` : '');
+
+  if (existingOrders.length > 0) {
+    document.getElementById('cust-cell-modal-deliverynote-btn').addEventListener('click', () => {
+      closeCustCellModal();
+      startDeliveryNote(custId, dateStr, existingOrders[0].id);
+    });
+  }
 
   custCellModalContext = { custId, dateStr };
   document.getElementById('cust-cell-modal').style.display = 'flex';
