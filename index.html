@@ -822,6 +822,10 @@
         <input id="invoice-edit-duedate" type="date">
       </div>
     </div>
+    <label class="weekday-check" style="width:100%; box-sizing:border-box; justify-content:flex-start; margin-bottom:10px;">
+      <input type="checkbox" id="invoice-edit-include-casepack" checked>
+      品目名に入り数表記(例:1箱12個入り)を含める
+    </label>
     <div class="field" style="margin-bottom: 10px;">
       <label>内容(自由に修正・追加・削除できます)</label>
     </div>
@@ -1710,16 +1714,13 @@ function renderInvoiceEditItems(rows) {
 
 let invoiceEditContext = null;
 
-function openInvoiceEditModal(customerId, startDate, endDate) {
+function buildInvoiceEditRows(customerId, startDate, endDate, includeCasePack) {
   const cust = customers.find(c => c.id === customerId);
-  if (!cust) { showSaveNote('請求書を作成できませんでした'); return; }
   const custOrders = getInvoiceOrdersForCustomer(customerId, startDate, endDate);
-  if (custOrders.length === 0) { showSaveNote('対象期間に注文がありません'); return; }
-
-  const rows = custOrders.map(o => {
+  return custOrders.map(o => {
     const sd = calcShipDate(o.deliveryDate || o.date, cust.leadDays);
     const [, m, d] = sd.split('-').map(Number);
-    const info = getDisplayQtyInfo(o, cust, true);
+    const info = getDisplayQtyInfo(o, cust, includeCasePack);
     return {
       content: m + '/' + d + '　' + info.label,
       qty: String(info.qty),
@@ -1728,6 +1729,17 @@ function openInvoiceEditModal(customerId, startDate, endDate) {
       taxRate: String(o.taxRate || 8)
     };
   });
+}
+
+function openInvoiceEditModal(customerId, startDate, endDate) {
+  const cust = customers.find(c => c.id === customerId);
+  if (!cust) { showSaveNote('請求書を作成できませんでした'); return; }
+  const custOrdersCheck = getInvoiceOrdersForCustomer(customerId, startDate, endDate);
+  if (custOrdersCheck.length === 0) { showSaveNote('対象期間に注文がありません'); return; }
+
+  const includeCasePackCheckbox = document.getElementById('invoice-edit-include-casepack');
+  includeCasePackCheckbox.checked = true;
+  const rows = buildInvoiceEditRows(customerId, startDate, endDate, true);
 
   const [sy, sm, sd2] = startDate.split('-').map(Number);
   const [ey, em, ed2] = endDate.split('-').map(Number);
@@ -1742,9 +1754,16 @@ function openInvoiceEditModal(customerId, startDate, endDate) {
   document.getElementById('invoice-edit-duedate').value = computeDueDate(endDate);
   renderInvoiceEditItems(rows);
 
-  invoiceEditContext = { customerName: cust.name, startDate, endDate };
+  invoiceEditContext = { customerId, customerName: cust.name, startDate, endDate };
   document.getElementById('invoice-edit-modal').style.display = 'flex';
 }
+
+document.getElementById('invoice-edit-include-casepack').addEventListener('change', (e) => {
+  if (!invoiceEditContext || !invoiceEditContext.customerId) return;
+  const { customerId, startDate, endDate } = invoiceEditContext;
+  const rows = buildInvoiceEditRows(customerId, startDate, endDate, e.target.checked);
+  renderInvoiceEditItems(rows);
+});
 
 function closeInvoiceEditModal() {
   document.getElementById('invoice-edit-modal').style.display = 'none';
