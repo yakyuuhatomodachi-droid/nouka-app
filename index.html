@@ -210,6 +210,9 @@
   .cust-table .cust-total-cell { position: sticky; right: 0; background: var(--surface); font-weight: 500; z-index: 1; text-align: left; }
   .cust-total-item-line { font-size: 11px; font-weight: 400; color: var(--text-secondary); white-space: nowrap; }
   .cust-total-amount { margin-top: 4px; }
+  .cust-total-row { border-top: 2px solid var(--border); }
+  .cust-total-row td { background: var(--bg); font-weight: 500; vertical-align: top; }
+  .cust-total-row .cust-name-cell { position: sticky; left: 0; z-index: 1; }
   .cust-table th.cust-total-cell { background: var(--bg); z-index: 2; }
   .cust-table .day-cell-content { font-size: 11px; line-height: 1.4; }
   .cust-cell-clickable { cursor: pointer; }
@@ -2782,6 +2785,7 @@ function renderCustomerCalendarTable() {
   // 取引先ID・日付ごとに出荷内容と個数・金額をまとめる
   const cellMap = {}; // custId -> dateStr -> [{item, qty, unit, pieces}]
   const totals = {}; // custId -> {amount, byItem: {item -> {unit, qty, pieces, hasPieces}}}
+  const dateTotals = {}; // dateStr -> {amount, byItem: {...}}
   orders.forEach(o => {
     const cust = customers.find(c => c.id === o.customerId);
     if (!cust) return;
@@ -2797,6 +2801,14 @@ function renderCustomerCalendarTable() {
     totals[cust.id].byItem[itemKey].qty += (o.qty || 0);
     if (pieces !== null) { totals[cust.id].byItem[itemKey].pieces += pieces; totals[cust.id].byItem[itemKey].hasPieces = true; }
     totals[cust.id].amount += computeAmount(o);
+
+    // 日付ごと(縦の合計)の集計
+    if (!dateTotals[shipDate]) dateTotals[shipDate] = { amount: 0, byItem: {} };
+    const dateItemKey = o.item + '||' + (o.unit || '');
+    if (!dateTotals[shipDate].byItem[dateItemKey]) dateTotals[shipDate].byItem[dateItemKey] = { item: o.item, unit: o.unit || '', qty: 0, pieces: 0, hasPieces: false };
+    dateTotals[shipDate].byItem[dateItemKey].qty += (o.qty || 0);
+    if (pieces !== null) { dateTotals[shipDate].byItem[dateItemKey].pieces += pieces; dateTotals[shipDate].byItem[dateItemKey].hasPieces = true; }
+    dateTotals[shipDate].amount += computeAmount(o);
   });
 
   const sortedCustomers = customers;
@@ -2836,6 +2848,20 @@ function renderCustomerCalendarTable() {
     html += `<td class="cust-total-cell">${itemLines}<div class="cust-total-amount">${yen(t.amount)}</div></td>`;
     html += '</tr>';
   });
+
+  // 一番下に日付ごとの合計行を追加
+  html += '<tr class="cust-total-row"><td class="cust-name-cell">合計</td>';
+  dateStrs.forEach(d => {
+    const dt = dateTotals[d];
+    if (!dt) { html += '<td></td>'; return; }
+    const lines = Object.values(dt.byItem)
+      .map(v => `<div class="cust-total-item-line">${escapeHtml(v.item)} ${v.qty}${escapeHtml(v.unit)}${v.hasPieces ? `(${v.pieces}個)` : ''}</div>`)
+      .join('');
+    html += `<td>${lines}<div class="cust-total-amount">${yen(dt.amount)}</div></td>`;
+  });
+  const grandTotal = Object.values(dateTotals).reduce((s, dt) => s + dt.amount, 0);
+  html += `<td class="cust-total-cell"><div class="cust-total-amount">${yen(grandTotal)}</div></td></tr>`;
+
   html += '</tbody></table>';
   wrap.innerHTML = html;
   wrap.querySelectorAll('.cust-order-btn').forEach(btn => {
