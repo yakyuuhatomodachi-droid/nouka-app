@@ -813,6 +813,17 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="cust-cell-modal" style="display:none;">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 id="cust-cell-modal-title">注文の追加</h3>
+      <button class="modal-close" id="cust-cell-modal-close" aria-label="閉じる">×</button>
+    </div>
+    <div class="modal-body" id="cust-cell-modal-body"></div>
+    <button type="button" class="btn btn-primary" id="cust-cell-modal-add-btn" style="width: 100%; margin-top: 14px;">この日の注文を追加する</button>
+  </div>
+</div>
+
 <script>
 // ---- 合言葉ゲート ----
 const SITE_PASSWORD = '@shishimi262320';
@@ -2832,15 +2843,7 @@ function renderCustomerCalendarTable() {
   });
   wrap.querySelectorAll('.cust-cell-clickable').forEach(td => {
     td.addEventListener('click', () => {
-      const custId = td.dataset.cust;
-      pendingShipDate = td.dataset.date;
-      document.querySelector('.tab-btn[data-tab="orders"]').click();
-      document.getElementById('o-customer').value = custId;
-      updateOrderItemOptions();
-      applyPendingShipDate();
-      updateShipDatePreview();
-      updatePricePreview();
-      document.getElementById('o-customer').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      openCustCellModal(td.dataset.cust, td.dataset.date);
     });
   });
   wrap.querySelectorAll('.cust-move-btn').forEach(btn => {
@@ -2914,6 +2917,60 @@ function closeDayModal() {
   document.getElementById('day-modal').style.display = 'none';
 }
 
+let custCellModalContext = null;
+
+function openCustCellModal(custId, dateStr) {
+  const cust = customers.find(c => c.id === custId);
+  if (!cust) return;
+  const weekdayNames = ['日', '月', '火', '水', '木', '金', '土'];
+  const [, m, d] = dateStr.split('-').map(Number);
+  document.getElementById('cust-cell-modal-title').textContent =
+    escapeHtml(cust.name) + '　' + m + '月' + d + '日(' + weekdayNames[weekdayOf(dateStr)] + ')';
+
+  const existingOrders = orders.filter(o => {
+    if (o.customerId !== custId) return false;
+    return calcShipDate(o.deliveryDate || o.date, cust.leadDays) === dateStr;
+  });
+
+  const body = document.getElementById('cust-cell-modal-body');
+  body.innerHTML = existingOrders.length === 0
+    ? '<div class="empty-state">この日はまだ注文がありません</div>'
+    : existingOrders.map(o => {
+        const pieces = getPieceCount(o.qty, o.casePack);
+        return `
+          <div class="modal-item-row">
+            <div class="modal-item-name">${escapeHtml(o.item)} ${o.qty}${escapeHtml(o.unit || '')}${pieces !== null ? ` (${pieces}個)` : ''}</div>
+            <div class="modal-item-sub">状況: ${escapeHtml(o.status)}</div>
+          </div>
+        `;
+      }).join('');
+
+  custCellModalContext = { custId, dateStr };
+  document.getElementById('cust-cell-modal').style.display = 'flex';
+}
+
+function closeCustCellModal() {
+  document.getElementById('cust-cell-modal').style.display = 'none';
+}
+
+document.getElementById('cust-cell-modal-close').addEventListener('click', closeCustCellModal);
+document.getElementById('cust-cell-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'cust-cell-modal') closeCustCellModal();
+});
+document.getElementById('cust-cell-modal-add-btn').addEventListener('click', () => {
+  if (!custCellModalContext) return;
+  const { custId, dateStr } = custCellModalContext;
+  closeCustCellModal();
+  pendingShipDate = dateStr;
+  document.querySelector('.tab-btn[data-tab="orders"]').click();
+  document.getElementById('o-customer').value = custId;
+  updateOrderItemOptions();
+  applyPendingShipDate();
+  updateShipDatePreview();
+  updatePricePreview();
+  document.getElementById('o-customer').scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+
 function weekdayOf(dateStr) {
   return parseDateOnly(dateStr).getUTCDay();
 }
@@ -2943,6 +3000,7 @@ document.addEventListener('keydown', (e) => {
       closeCustomerFormModal();
     }
     closeInvoiceEditModal();
+    closeCustCellModal();
     document.getElementById('save-status-modal').style.display = 'none';
   }
 });
