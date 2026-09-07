@@ -2658,7 +2658,7 @@ function buildShipDateMap() {
     if (!shipDate) return;
     if (!map[shipDate]) map[shipDate] = [];
     const pieces = getPieceCount(o.qty, o.casePack);
-    map[shipDate].push({ item: o.item, qty: o.qty, unit: o.unit || '', customerName: cust.name, pieces });
+    map[shipDate].push({ item: o.item, qty: o.qty, unit: o.unit || '', customerName: cust.name, pieces, deliveryDate });
   });
   return map;
 }
@@ -2830,12 +2830,16 @@ function openDayModal(dateStr) {
   const body = document.getElementById('modal-body-content');
   body.innerHTML = entries.length === 0
     ? '<div class="empty-state">この日の出荷予定はありません</div>'
-    : entries.map(e => `
+    : entries.map(e => {
+        const [, dm, dd] = (e.deliveryDate || '').split('-').map(Number);
+        const deliveryLabel = e.deliveryDate ? `納品日: ${dm}/${dd}` : '';
+        return `
         <div class="modal-item-row">
           <div class="modal-item-name">${escapeHtml(e.item)} ${e.qty}${escapeHtml(e.unit)}${e.pieces !== null ? ` (${e.pieces}個)` : ''}</div>
-          <div class="modal-item-sub">${escapeHtml(e.customerName)}</div>
+          <div class="modal-item-sub">${escapeHtml(e.customerName)}${deliveryLabel ? '　' + deliveryLabel : ''}</div>
         </div>
-      `).join('');
+      `;
+      }).join('');
 
   document.getElementById('day-modal').style.display = 'flex';
 }
@@ -3129,7 +3133,7 @@ function renderTodayOnly() {
 function renderDayItemTableHtml(dayIndex, items) {
   return `
     <table class="data-table">
-      <thead><tr><th>品目</th><th>数量</th><th>個数換算</th><th>出荷先</th><th>状況</th><th>詳細</th></tr></thead>
+      <thead><tr><th>品目</th><th>数量</th><th>個数換算</th><th>納品日</th><th>出荷先</th><th>状況</th><th>詳細</th></tr></thead>
       <tbody>
         ${items.map((i, idx) => {
           const rowOrders = i.orderIds.map(id => orders.find(o => o.id === id)).filter(Boolean);
@@ -3137,7 +3141,12 @@ function renderDayItemTableHtml(dayIndex, items) {
           const statusCell = allShipped
             ? `<button type="button" class="status-pill status-出荷済 unmark-shipped-btn" data-day="${dayIndex}" data-idx="${idx}">出荷済み</button>`
             : `<button type="button" class="btn-ship mark-shipped-btn" data-day="${dayIndex}" data-idx="${idx}">出荷済みにする</button>`;
-          return `<tr><td data-label="品目">${escapeHtml(i.item)}</td><td data-label="数量">${i.qty}${escapeHtml(i.unit)}</td><td data-label="個数換算">${i.pieces !== null ? i.pieces + '個' : '-'}</td><td data-label="出荷先">${escapeHtml(i.customerName)}</td><td data-label="状況">${statusCell}</td><td data-label="詳細"><button type="button" class="btn-ghost order-detail-btn" data-day="${dayIndex}" data-idx="${idx}">注文</button></td></tr>`;
+          const deliveryDates = [...new Set(rowOrders.map(o => o.deliveryDate || o.date).filter(Boolean))];
+          const deliveryDateLabel = deliveryDates.map(d => {
+            const [, m, dd] = d.split('-').map(Number);
+            return m + '/' + dd;
+          }).join('・') || '-';
+          return `<tr><td data-label="品目">${escapeHtml(i.item)}</td><td data-label="数量">${i.qty}${escapeHtml(i.unit)}</td><td data-label="個数換算">${i.pieces !== null ? i.pieces + '個' : '-'}</td><td data-label="納品日">${deliveryDateLabel}</td><td data-label="出荷先">${escapeHtml(i.customerName)}</td><td data-label="状況">${statusCell}</td><td data-label="詳細"><button type="button" class="btn-ghost order-detail-btn" data-day="${dayIndex}" data-idx="${idx}">注文</button></td></tr>`;
         }).join('')}
       </tbody>
     </table>
