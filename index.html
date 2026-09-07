@@ -2658,7 +2658,7 @@ function buildShipDateMap() {
     if (!shipDate) return;
     if (!map[shipDate]) map[shipDate] = [];
     const pieces = getPieceCount(o.qty, o.casePack);
-    map[shipDate].push({ id: o.id, item: o.item, qty: o.qty, unit: o.unit || '', customerName: cust.name, pieces, deliveryDate });
+    map[shipDate].push({ id: o.id, item: o.item, qty: o.qty, unit: o.unit || '', customerName: cust.name, customerId: o.customerId, pieces, deliveryDate });
   });
   return map;
 }
@@ -2826,9 +2826,17 @@ function openDayModal(dateStr) {
   const [, m, d] = dateStr.split('-').map(Number);
   document.getElementById('modal-date-title').textContent = m + '月' + d + '日(' + weekdayNames[weekdayOf(dateStr)] + ')の出荷';
 
-  const entries = buildShipDateMap()[dateStr] || [];
+  const entries = sortShipItems(buildShipDateMap()[dateStr] || []);
   const body = document.getElementById('modal-body-content');
-  body.innerHTML = entries.length === 0
+
+  const sortControlHtml = `
+    <div style="display:flex; gap:8px; margin-bottom:10px;">
+      <button type="button" class="btn-ghost day-modal-sort-btn" data-sort-key="customer" style="${shipItemSortKey === 'customer' ? 'font-weight:bold;' : ''}">取引先順</button>
+      <button type="button" class="btn-ghost day-modal-sort-btn" data-sort-key="item" style="${shipItemSortKey === 'item' ? 'font-weight:bold;' : ''}">品目順</button>
+    </div>
+  `;
+
+  body.innerHTML = sortControlHtml + (entries.length === 0
     ? '<div class="empty-state">この日の出荷予定はありません</div>'
     : entries.map(e => {
         const [, dm, dd] = (e.deliveryDate || '').split('-').map(Number);
@@ -2840,13 +2848,20 @@ function openDayModal(dateStr) {
           <button type="button" class="btn-text day-modal-edit-btn" data-id="${e.id}">この注文を編集</button>
         </div>
       `;
-      }).join('');
+      }).join(''));
 
   body.querySelectorAll('.day-modal-edit-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       closeDayModal();
       document.querySelector('.tab-btn[data-tab="orders"]').click();
       editOrder(btn.dataset.id);
+    });
+  });
+  body.querySelectorAll('.day-modal-sort-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      shipItemSortKey = btn.dataset.sortKey;
+      shipItemSortDir = 'asc';
+      openDayModal(dateStr);
     });
   });
 
@@ -3028,15 +3043,40 @@ function groupItemQty(list) {
     const cust = customers.find(c => c.id === o.customerId);
     const custName = cust ? cust.name : '(削除済み)';
     const key = o.item + '||' + (o.unit || '箱') + '||' + o.customerId;
-    if (!map[key]) map[key] = { item: o.item, unit: o.unit || '箱', qty: 0, pieces: 0, hasPieces: false, customerName: custName, orderIds: [] };
+    if (!map[key]) map[key] = { item: o.item, unit: o.unit || '箱', qty: 0, pieces: 0, hasPieces: false, customerName: custName, customerId: o.customerId, orderIds: [] };
     map[key].qty += (o.qty || 0);
     const pieces = getPieceCount(o.qty, o.casePack);
     if (pieces !== null) { map[key].pieces += pieces; map[key].hasPieces = true; }
     map[key].orderIds.push(o.id);
   });
   return Object.values(map)
-    .map(v => ({ item: v.item, unit: v.unit, qty: v.qty, pieces: v.hasPieces ? v.pieces : null, customerName: v.customerName, orderIds: v.orderIds }))
-    .sort((a, b) => a.item.localeCompare(b.item, 'ja') || b.qty - a.qty);
+    .map(v => ({ item: v.item, unit: v.unit, qty: v.qty, pieces: v.hasPieces ? v.pieces : null, customerName: v.customerName, customerId: v.customerId, orderIds: v.orderIds }));
+}
+
+function getCustomerSortOrder(customerId) {
+  const idx = customers.findIndex(c => c.id === customerId);
+  if (idx === -1) return 999999;
+  const c = customers[idx];
+  return c.sortOrder !== undefined ? c.sortOrder : idx;
+}
+
+let shipItemSortKey = 'customer';
+let shipItemSortDir = 'asc';
+
+function sortShipItems(items) {
+  const sorted = [...items].sort((a, b) => {
+    let cmp = 0;
+    if (shipItemSortKey === 'customer') {
+      cmp = getCustomerSortOrder(a.customerId) - getCustomerSortOrder(b.customerId);
+      if (cmp === 0) cmp = a.item.localeCompare(b.item, 'ja');
+    } else if (shipItemSortKey === 'item') {
+      cmp = a.item.localeCompare(b.item, 'ja') || b.qty - a.qty;
+    } else if (shipItemSortKey === 'qty') {
+      cmp = b.qty - a.qty;
+    }
+    return shipItemSortDir === 'asc' ? cmp : -cmp;
+  });
+  return sorted;
 }
 
 function summarizeItemTotals(items) {
@@ -3128,6 +3168,18 @@ function renderTodayOnly() {
       openOrderDetailModal(items[parseInt(btn.dataset.idx, 10)]);
     });
   });
+  itemWrap.querySelectorAll('.ship-sortable-th').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.sortKey;
+      if (shipItemSortKey === key) {
+        shipItemSortDir = shipItemSortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        shipItemSortKey = key;
+        shipItemSortDir = 'asc';
+      }
+      renderTodayOnly();
+    });
+  });
 
   document.getElementById('todayonly-add-order-btn').addEventListener('click', () => {
     pendingShipDate = todayVal;
@@ -3140,11 +3192,22 @@ function renderTodayOnly() {
 }
 
 function renderDayItemTableHtml(dayIndex, items) {
+  const sortedItems = sortShipItems(items);
+  const arrow = (key) => shipItemSortKey === key ? (shipItemSortDir === 'asc' ? ' ▲' : ' ▼') : '';
   return `
     <table class="data-table">
-      <thead><tr><th>品目</th><th>数量</th><th>個数換算</th><th>納品日</th><th>出荷先</th><th>状況</th><th>詳細</th></tr></thead>
+      <thead><tr>
+        <th class="sortable-th ship-sortable-th" data-sort-key="item">品目${arrow('item')}</th>
+        <th class="sortable-th ship-sortable-th" data-sort-key="qty">数量${arrow('qty')}</th>
+        <th>個数換算</th>
+        <th>納品日</th>
+        <th class="sortable-th ship-sortable-th" data-sort-key="customer">出荷先${arrow('customer')}</th>
+        <th>状況</th>
+        <th>詳細</th>
+      </tr></thead>
       <tbody>
-        ${items.map((i, idx) => {
+        ${sortedItems.map((i) => {
+          const idx = items.indexOf(i);
           const rowOrders = i.orderIds.map(id => orders.find(o => o.id === id)).filter(Boolean);
           const allShipped = rowOrders.length > 0 && rowOrders.every(o => o.status !== '未出荷');
           const statusCell = allShipped
@@ -3257,6 +3320,18 @@ function renderToday() {
     btn.addEventListener('click', () => {
       const row = dayItemsMap[btn.dataset.day][parseInt(btn.dataset.idx, 10)];
       openOrderDetailModal(row);
+    });
+  });
+  itemWrap.querySelectorAll('.ship-sortable-th').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.sortKey;
+      if (shipItemSortKey === key) {
+        shipItemSortDir = shipItemSortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        shipItemSortKey = key;
+        shipItemSortDir = 'asc';
+      }
+      renderToday();
     });
   });
 
