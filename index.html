@@ -417,6 +417,13 @@
           <label class="weekday-check"><input type="checkbox" id="c-needs-invoice">請求書が必要</label>
         </div>
       </div>
+      <div class="field" style="margin-bottom: 10px; max-width: 260px;">
+        <label for="c-qty-display">納品書・請求書の数量表示</label>
+        <select id="c-qty-display">
+          <option value="box">箱数で表示(例: 10箱)</option>
+          <option value="piece">個数で表示(例: 120個)</option>
+        </select>
+      </div>
       <div class="error-text" id="c-error">取引先名を入力してください</div>
       <div class="field" style="margin-bottom: 10px;">
         <label>品目別の単位・単価・入り数</label>
@@ -1221,6 +1228,25 @@ function computeAmount(o) {
   return effectiveQty * (o.price || 0);
 }
 
+function getDisplayQtyInfo(o, cust, includeCasePack) {
+  const caseLabel = includeCasePack && o.casePack ? `(1${o.unit || '箱'}${o.casePack}個入り)` : '';
+  if (cust && cust.quantityUnit === 'piece' && o.casePack) {
+    const pieces = getPieceCount(o.qty, o.casePack);
+    return {
+      label: o.item + caseLabel,
+      qty: pieces !== null ? pieces : o.qty,
+      unit: '個',
+      price: o.price || 0
+    };
+  }
+  return {
+    label: o.item + caseLabel,
+    qty: o.qty,
+    unit: o.unit || '',
+    price: o.casePack ? (o.price || 0) * o.casePack : (o.price || 0)
+  };
+}
+
 function generateDeliveryNote(customerId, shipDate, singleOrderId, includeCasePack = true, remarks = '') {
   const cust = customers.find(c => c.id === customerId);
   if (!cust || !shipDate) { showSaveNote('納品書を作成できませんでした'); return; }
@@ -1237,13 +1263,16 @@ function generateDeliveryNote(customerId, shipDate, singleOrderId, includeCasePa
 
   const [, m, d] = shipDate.split('-').map(Number);
 
-  const lineItems = dayOrders.map(o => ({
-    label: o.item + (includeCasePack && o.casePack ? `(1${o.unit || '箱'}${o.casePack}個入り)` : ''),
-    qty: o.qty,
-    unit: o.unit || '',
-    price: o.casePack ? (o.price || 0) * o.casePack : (o.price || 0),
-    taxRate: o.taxRate || 8
-  }));
+  const lineItems = dayOrders.map(o => {
+    const info = getDisplayQtyInfo(o, cust, includeCasePack);
+    return {
+      label: info.label,
+      qty: info.qty,
+      unit: info.unit,
+      price: info.price,
+      taxRate: o.taxRate || 8
+    };
+  });
 
   const html = renderDeliveryNoteHtml({
     customerName: cust.name,
@@ -1690,12 +1719,12 @@ function openInvoiceEditModal(customerId, startDate, endDate) {
   const rows = custOrders.map(o => {
     const sd = calcShipDate(o.deliveryDate || o.date, cust.leadDays);
     const [, m, d] = sd.split('-').map(Number);
-    const itemLabel = o.item + (o.casePack ? `(1${o.unit || '箱'}${o.casePack}個入り)` : '');
+    const info = getDisplayQtyInfo(o, cust, true);
     return {
-      content: m + '/' + d + '　' + itemLabel,
-      qty: String(o.qty),
-      unit: o.unit || '箱',
-      price: String(o.casePack ? (o.price || 0) * o.casePack : (o.price || 0)),
+      content: m + '/' + d + '　' + info.label,
+      qty: String(info.qty),
+      unit: info.unit,
+      price: String(info.price),
       taxRate: String(o.taxRate || 8)
     };
   });
@@ -2403,6 +2432,7 @@ function editCustomer(id) {
   });
   document.getElementById('c-needs-delivery-note').checked = !!c.needsDeliveryNote;
   document.getElementById('c-needs-invoice').checked = !!c.needsInvoice;
+  document.getElementById('c-qty-display').value = c.quantityUnit === 'piece' ? 'piece' : 'box';
   const rows = itemSettingsToRows(c);
   renderItemSettingsRows(rows);
   document.getElementById('customer-form-heading').textContent = escapeHtml(c.name) + 'を編集';
@@ -2430,6 +2460,7 @@ document.getElementById('c-submit').addEventListener('click', async () => {
   const deliveryDays = [...document.querySelectorAll('.c-weekday:checked')].map(cb => parseInt(cb.value, 10));
   const needsDeliveryNote = document.getElementById('c-needs-delivery-note').checked;
   const needsInvoice = document.getElementById('c-needs-invoice').checked;
+  const quantityUnit = document.getElementById('c-qty-display').value;
   const itemSettings = readItemSettingsFromDOM()
     .filter(r => r.item)
     .map(r => {
@@ -2445,7 +2476,7 @@ document.getElementById('c-submit').addEventListener('click', async () => {
   let savedCustomer;
   if (editingCustomerId) {
     const c = customers.find(x => x.id === editingCustomerId);
-    c.name = name; c.contact = contact; c.zip = zip; c.address = address; c.leadDays = leadDays; c.memo = memo; c.itemSettings = itemSettings; c.deliveryDays = deliveryDays; c.needsDeliveryNote = needsDeliveryNote; c.needsInvoice = needsInvoice;
+    c.name = name; c.contact = contact; c.zip = zip; c.address = address; c.leadDays = leadDays; c.memo = memo; c.itemSettings = itemSettings; c.deliveryDays = deliveryDays; c.needsDeliveryNote = needsDeliveryNote; c.needsInvoice = needsInvoice; c.quantityUnit = quantityUnit;
     delete c.prices;
     savedCustomer = c;
     editingCustomerId = null;
@@ -2454,7 +2485,7 @@ document.getElementById('c-submit').addEventListener('click', async () => {
     closeCustomerFormModal();
   } else {
     const maxOrder = customers.reduce((max, c) => Math.max(max, c.sortOrder || 0), 0);
-    savedCustomer = { id: uid(), name, contact, zip, address, leadDays, memo, itemSettings, deliveryDays, needsDeliveryNote, needsInvoice, sortOrder: maxOrder + 1 };
+    savedCustomer = { id: uid(), name, contact, zip, address, leadDays, memo, itemSettings, deliveryDays, needsDeliveryNote, needsInvoice, quantityUnit, sortOrder: maxOrder + 1 };
     customers.push(savedCustomer);
   }
   document.getElementById('c-name').value = '';
@@ -2466,6 +2497,7 @@ document.getElementById('c-submit').addEventListener('click', async () => {
   document.querySelectorAll('.c-weekday').forEach(cb => { cb.checked = false; });
   document.getElementById('c-needs-delivery-note').checked = false;
   document.getElementById('c-needs-invoice').checked = false;
+  document.getElementById('c-qty-display').value = 'box';
   renderItemSettingsRows([]);
   const ok = await saveCustomer(savedCustomer);
   showSaveModal(ok ? '取引先を保存しました' : '取引先の保存に失敗しました。もう一度お試しください');
