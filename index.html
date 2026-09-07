@@ -1002,7 +1002,7 @@ function openOrderDetailModal(row) {
   if (rowOrders.length === 0) {
     body.innerHTML = '<div class="empty-state">対象の注文が見つかりません(削除済みの可能性があります)</div>';
   } else {
-    body.innerHTML = rowOrders.map(o => {
+    const rowsHtml = rowOrders.map(o => {
       const cust = customers.find(c => c.id === o.customerId);
       const deliveryDate = o.deliveryDate || o.date || '-';
       const shipDate = calcShipDate(o.deliveryDate || o.date, cust ? cust.leadDays : 0) || '-';
@@ -1022,6 +1022,12 @@ function openOrderDetailModal(row) {
         </div>
       `;
     }).join('');
+    const firstOrder = rowOrders[0];
+    body.innerHTML = rowsHtml + `
+      <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);">
+        <button type="button" class="btn btn-primary" id="order-detail-deliverynote-btn" style="width: 100%;">納品書を作成</button>
+      </div>
+    `;
     body.querySelectorAll('.order-detail-edit-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         closeOrderDetailModal();
@@ -1029,12 +1035,6 @@ function openOrderDetailModal(row) {
         editOrder(btn.dataset.id);
       });
     });
-    const firstOrder = rowOrders[0];
-    body.innerHTML += `
-      <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);">
-        <button type="button" class="btn btn-primary" id="order-detail-deliverynote-btn" style="width: 100%;">納品書を作成</button>
-      </div>
-    `;
     document.getElementById('order-detail-deliverynote-btn').addEventListener('click', () => {
       const cust = customers.find(c => c.id === firstOrder.customerId);
       const shipDate = calcShipDate(firstOrder.deliveryDate || firstOrder.date, cust ? cust.leadDays : 0);
@@ -2658,7 +2658,7 @@ function buildShipDateMap() {
     if (!shipDate) return;
     if (!map[shipDate]) map[shipDate] = [];
     const pieces = getPieceCount(o.qty, o.casePack);
-    map[shipDate].push({ item: o.item, qty: o.qty, unit: o.unit || '', customerName: cust.name, pieces, deliveryDate });
+    map[shipDate].push({ id: o.id, item: o.item, qty: o.qty, unit: o.unit || '', customerName: cust.name, pieces, deliveryDate });
   });
   return map;
 }
@@ -2837,9 +2837,18 @@ function openDayModal(dateStr) {
         <div class="modal-item-row">
           <div class="modal-item-name">${escapeHtml(e.item)} ${e.qty}${escapeHtml(e.unit)}${e.pieces !== null ? ` (${e.pieces}個)` : ''}</div>
           <div class="modal-item-sub">${escapeHtml(e.customerName)}${deliveryLabel ? '　' + deliveryLabel : ''}</div>
+          <button type="button" class="btn-text day-modal-edit-btn" data-id="${e.id}">この注文を編集</button>
         </div>
       `;
       }).join('');
+
+  body.querySelectorAll('.day-modal-edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      closeDayModal();
+      document.querySelector('.tab-btn[data-tab="orders"]').click();
+      editOrder(btn.dataset.id);
+    });
+  });
 
   document.getElementById('day-modal').style.display = 'flex';
 }
