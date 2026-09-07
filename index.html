@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>農家の売上管理</title>
+<title>アクア農園販売管理</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap');
 
@@ -270,7 +270,7 @@
 </div>
 <div class="app">
   <div class="app-header">
-    <h1>農家の売上管理</h1>
+    <h1>アクア農園販売管理</h1>
     <p>取引先・注文・売上をひとつにまとめて記録します(このリンクを開いた人と共有されるデータです)</p>
   </div>
 
@@ -2091,7 +2091,7 @@ document.getElementById('freenote-create-btn').addEventListener('click', () => {
 document.getElementById('backup-download-btn').addEventListener('click', () => {
   const backup = {
     exportedAt: new Date().toISOString(),
-    appName: '農家の売上管理',
+    appName: 'アクア農園販売管理',
     customers,
     orders,
     itemList: ITEM_LIST
