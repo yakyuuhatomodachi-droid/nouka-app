@@ -179,12 +179,7 @@
 
   @media (max-width: 520px) {
     .app { padding: 16px 10px 40px; }
-    .cust-table { table-layout: auto; width: max-content; min-width: 100%; }
-    .cust-table th:not(.cust-name-cell):not(.cust-total-cell),
-    .cust-table td:not(.cust-name-cell):not(.cust-total-cell) {
-      width: 110px !important;
-      white-space: normal;
-    }
+    .cust-table { table-layout: fixed; width: max-content; min-width: 100%; }
     .row-actions { text-align: left; }
     .data-table, .data-table thead, .data-table tbody, .data-table tfoot, .data-table th, .data-table td, .data-table tr { display: block; }
     .data-table thead { display: none; }
@@ -201,28 +196,28 @@
   .calendar-wrap { overflow-x: auto; overflow-y: auto; max-height: 75vh; margin: 0 -4px; padding: 0 4px; border: 1px solid var(--border); border-radius: 8px; }
   .cal-view-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
-  .cust-table { border-collapse: separate; border-spacing: 0; font-size: 12px; width: 100%; table-layout: fixed; }
+  .cust-table { border-collapse: separate; border-spacing: 0; font-size: 12px; width: max-content; min-width: 100%; table-layout: fixed; }
   .cust-table th, .cust-table td { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 6px 8px; text-align: left; white-space: nowrap; }
   .cust-table th:first-child, .cust-table td:first-child { border-left: 1px solid var(--border); }
   .cust-table thead th { border-top: 1px solid var(--border); }
   .cust-table td:not(.cust-name-cell):not(.cust-total-cell),
   .cust-table th:not(.cust-name-cell):not(.cust-total-cell) {
-    white-space: normal;
+    width: 190px;
+    white-space: nowrap;
     vertical-align: top;
-    word-break: break-word;
   }
   .cust-table th { background: var(--bg); font-size: 11px; font-weight: 500; color: var(--text-secondary); position: sticky; top: 0; z-index: 3; }
   .cust-table td.fixed-day-col { background: var(--gold-light); }
   .cust-table th.today-col, .cust-table td.today-col { background: var(--accent-light); }
-  .cust-table .cust-name-cell { position: sticky; left: 0; background: var(--surface); font-weight: 500; z-index: 1; width: 13%; white-space: normal; }
+  .cust-table .cust-name-cell { position: sticky; left: 0; background: var(--surface); font-weight: 500; z-index: 1; width: 190px; white-space: normal; }
   .cust-name-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .cust-name-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
   .cust-move-btn { font-size: 11px; padding: 3px 7px; line-height: 1; }
   .cust-move-btn:disabled { opacity: 0.3; cursor: default; }
   .cust-order-btn { font-size: 11px; padding: 3px 8px; flex-shrink: 0; }
   .cust-table th.cust-name-cell { background: var(--bg); z-index: 4; }
-  .cust-table .cust-total-cell { position: sticky; right: 0; background: var(--surface); font-weight: 500; z-index: 1; text-align: left; width: 13%; white-space: normal; }
-  .cust-total-item-line { font-size: 11px; font-weight: 400; color: var(--text-secondary); white-space: normal; word-break: break-word; }
+  .cust-table .cust-total-cell { position: sticky; right: 0; background: var(--surface); font-weight: 500; z-index: 1; text-align: left; width: 220px; white-space: nowrap; }
+  .cust-total-item-line { font-size: 11px; font-weight: 400; color: var(--text-secondary); white-space: nowrap; }
   .cust-total-amount { margin-top: 4px; }
   .cust-total-row { border-top: 2px solid var(--border); }
   .cust-total-row td { background: var(--bg); font-weight: 500; vertical-align: top; }
@@ -2833,13 +2828,12 @@ function renderCustomerCalendarTable() {
 
   const sortedCustomers = customers;
 
-  const dayColPct = (74 / dateStrs.length).toFixed(3);
   let html = '<table class="cust-table"><thead><tr>' +
     `<th class="cust-name-cell">取引先</th>` +
     dateStrs.map(d => {
       const day = parseInt(d.slice(-2), 10);
       const isToday = d === todayStrVal;
-      return `<th class="${isToday ? 'today-col' : ''}" style="width:${dayColPct}%;">${day}(${weekdayNames[weekdayOf(d)]})</th>`;
+      return `<th class="${isToday ? 'today-col' : ''}">${day}(${weekdayNames[weekdayOf(d)]})</th>`;
     }).join('') +
     '<th class="cust-total-cell">合計</th></tr></thead><tbody>';
 
