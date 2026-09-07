@@ -214,9 +214,6 @@
   .cust-table th { background: var(--bg); font-size: 11px; font-weight: 500; color: var(--text-secondary); position: sticky; top: 0; z-index: 3; }
   .cust-table td.fixed-day-col { background: var(--gold-light); }
   .cust-table th.today-col, .cust-table td.today-col { background: var(--accent-light); }
-  .col-resize-handle { position: absolute; top: 0; right: -3px; width: 6px; height: 100%; cursor: col-resize; z-index: 6; touch-action: none; }
-  .col-resize-handle:hover, .col-resize-handle.is-dragging { background: var(--accent); opacity: 0.5; }
-
   .cust-table .cust-name-cell { position: sticky; left: 0; background: var(--surface); font-weight: 500; z-index: 1; width: 13%; white-space: normal; }
   .cust-name-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .cust-name-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
@@ -357,9 +354,15 @@
         <h2 id="calendar-title">カレンダー</h2>
         <button class="btn-ghost" id="cal-next">次月 →</button>
       </div>
-      <div style="display:flex; gap:8px; margin-bottom: 12px;">
+      <div style="display:flex; gap:8px; margin-bottom: 12px; align-items:center; flex-wrap: wrap;">
         <button type="button" class="btn-ghost cal-view-btn active" data-view="grid" id="cal-view-grid">カレンダー表示</button>
         <button type="button" class="btn-ghost cal-view-btn" data-view="table" id="cal-view-table">取引先別一覧</button>
+        <div id="cust-zoom-control" style="display:none; align-items:center; gap:6px; margin-left:auto;">
+          <button type="button" class="btn-ghost" id="cust-zoom-out" aria-label="縮小">−</button>
+          <span id="cust-zoom-label" style="font-size:13px; min-width:42px; text-align:center;">100%</span>
+          <button type="button" class="btn-ghost" id="cust-zoom-in" aria-label="拡大">＋</button>
+          <button type="button" class="btn-text" id="cust-zoom-reset">リセット</button>
+        </div>
       </div>
       <div class="calendar-wrap"><div id="customer-calendar"></div></div>
     </div>
@@ -2784,70 +2787,6 @@ function renderCustomerCalendarGrid() {
   wrap.querySelectorAll('.day-cell').forEach(td => td.addEventListener('click', () => openDayModal(td.dataset.date)));
 }
 
-const CUST_COL_WIDTHS_KEY = 'nouka_cust_col_widths';
-
-function loadCustColWidths() {
-  try {
-    const raw = localStorage.getItem(CUST_COL_WIDTHS_KEY);
-    if (!raw) return {};
-    return JSON.parse(raw);
-  } catch (e) { return {}; }
-}
-
-function saveCustColWidths(widths) {
-  try {
-    localStorage.setItem(CUST_COL_WIDTHS_KEY, JSON.stringify(widths));
-  } catch (e) { /* 保存できなくても致命的ではないので無視 */ }
-}
-
-function initColResizeHandles(wrap) {
-  wrap.querySelectorAll('.col-resize-handle').forEach(handle => {
-    handle.addEventListener('mousedown', (e) => startColResize(e, handle));
-    handle.addEventListener('touchstart', (e) => startColResize(e.touches[0], handle, e), { passive: false });
-  });
-}
-
-function startColResize(e, handle, touchEvent) {
-  if (touchEvent) touchEvent.preventDefault();
-  const colType = handle.dataset.col;
-  const th = handle.closest('th');
-  const startX = e.clientX;
-  const startWidth = th.getBoundingClientRect().width;
-  handle.classList.add('is-dragging');
-
-  function onMove(moveEvent) {
-    const point = moveEvent.touches ? moveEvent.touches[0] : moveEvent;
-    const delta = point.clientX - startX;
-    const newWidth = Math.max(50, Math.round(startWidth + delta));
-    const wrap = document.getElementById('customer-calendar');
-    wrap.querySelectorAll('th').forEach(headerCell => {
-      const isTarget = colType === 'name'
-        ? headerCell.classList.contains('cust-name-cell')
-        : (!headerCell.classList.contains('cust-name-cell') && !headerCell.classList.contains('cust-total-cell'));
-      if (isTarget) headerCell.style.width = newWidth + 'px';
-    });
-  }
-
-  function onUp(upEvent) {
-    const point = upEvent.changedTouches ? upEvent.changedTouches[0] : upEvent;
-    const delta = point.clientX - startX;
-    const newWidth = Math.max(50, Math.round(startWidth + delta));
-    const widths = loadCustColWidths();
-    widths[colType] = newWidth;
-    saveCustColWidths(widths);
-    handle.classList.remove('is-dragging');
-    document.removeEventListener('mousemove', onMove);
-    document.removeEventListener('mouseup', onUp);
-    document.removeEventListener('touchmove', onMove);
-    document.removeEventListener('touchend', onUp);
-  }
-
-  document.addEventListener('mousemove', onMove);
-  document.addEventListener('mouseup', onUp);
-  document.addEventListener('touchmove', onMove, { passive: false });
-  document.addEventListener('touchend', onUp);
-}
-
 function renderCustomerCalendarTable() {
   const wrap = document.getElementById('customer-calendar');
   document.getElementById('calendar-title').textContent = calYear + '年' + (calMonth + 1) + '月';
@@ -2894,17 +2833,13 @@ function renderCustomerCalendarTable() {
 
   const sortedCustomers = customers;
 
-  const customWidths = loadCustColWidths();
-  const nameWidthStyle = customWidths.name ? `width:${customWidths.name}px;` : 'width:13%;';
   const dayColPct = (74 / dateStrs.length).toFixed(3);
-  const dayWidthStyle = customWidths.day ? `width:${customWidths.day}px;` : `width:${dayColPct}%;`;
-
   let html = '<table class="cust-table"><thead><tr>' +
-    `<th class="cust-name-cell" style="${nameWidthStyle}">取引先<span class="col-resize-handle" data-col="name"></span></th>` +
+    `<th class="cust-name-cell">取引先</th>` +
     dateStrs.map(d => {
       const day = parseInt(d.slice(-2), 10);
       const isToday = d === todayStrVal;
-      return `<th class="${isToday ? 'today-col' : ''}" style="${dayWidthStyle}">${day}(${weekdayNames[weekdayOf(d)]})<span class="col-resize-handle" data-col="day"></span></th>`;
+      return `<th class="${isToday ? 'today-col' : ''}" style="width:${dayColPct}%;">${day}(${weekdayNames[weekdayOf(d)]})</th>`;
     }).join('') +
     '<th class="cust-total-cell">合計</th></tr></thead><tbody>';
 
@@ -2951,7 +2886,6 @@ function renderCustomerCalendarTable() {
 
   html += '</tbody></table>';
   wrap.innerHTML = html;
-  initColResizeHandles(wrap);
   wrap.querySelectorAll('.cust-order-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const custId = btn.dataset.cust;
@@ -3150,12 +3084,43 @@ document.getElementById('cal-next').addEventListener('click', () => {
   renderCustomerCalendar();
 });
 
+const CUST_ZOOM_KEY = 'nouka_cust_zoom';
+let custZoomLevel = parseInt(localStorage.getItem(CUST_ZOOM_KEY), 10) || 100;
+
+function applyCustZoom() {
+  const el = document.getElementById('customer-calendar');
+  el.style.zoom = (custZoomLevel / 100);
+  document.getElementById('cust-zoom-label').textContent = custZoomLevel + '%';
+}
+
+function updateCustZoomControlVisibility() {
+  document.getElementById('cust-zoom-control').style.display = calendarViewMode === 'table' ? 'flex' : 'none';
+}
+
+document.getElementById('cust-zoom-in').addEventListener('click', () => {
+  custZoomLevel = Math.min(150, custZoomLevel + 10);
+  localStorage.setItem(CUST_ZOOM_KEY, custZoomLevel);
+  applyCustZoom();
+});
+document.getElementById('cust-zoom-out').addEventListener('click', () => {
+  custZoomLevel = Math.max(40, custZoomLevel - 10);
+  localStorage.setItem(CUST_ZOOM_KEY, custZoomLevel);
+  applyCustZoom();
+});
+document.getElementById('cust-zoom-reset').addEventListener('click', () => {
+  custZoomLevel = 100;
+  localStorage.setItem(CUST_ZOOM_KEY, custZoomLevel);
+  applyCustZoom();
+});
+
 document.querySelectorAll('.cal-view-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     calendarViewMode = btn.dataset.view;
     document.querySelectorAll('.cal-view-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     renderCustomerCalendar();
+    updateCustZoomControlVisibility();
+    if (calendarViewMode === 'table') applyCustZoom();
   });
 });
 
