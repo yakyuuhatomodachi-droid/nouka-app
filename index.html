@@ -122,6 +122,8 @@
   .btn-primary:hover { background: #294032; }
   .btn-ghost { background: none; border: 1px solid var(--border); color: var(--text-primary); }
   .btn-ghost:hover { border-color: var(--text-secondary); }
+  .btn-ghost.btn-danger { color: var(--danger); border-color: var(--danger); }
+  .btn-ghost.btn-danger:hover { background: var(--danger); color: #fff; }
   .btn-text-danger { background: none; border: none; color: var(--danger); font-size: 13px; cursor: pointer; padding: 4px 8px; }
   .btn-text-danger:hover { text-decoration: underline; }
   .btn-text { background: none; border: none; color: var(--accent); font-size: 13px; cursor: pointer; padding: 4px 8px; }
@@ -2695,6 +2697,22 @@ async function deleteOrder(id) {
   renderCustomerCalendar();
 }
 
+async function deleteShipItemRow(orderIds) {
+  if (!orderIds || orderIds.length === 0) return;
+  const msg = orderIds.length > 1
+    ? 'この品目の注文' + orderIds.length + '件をまとめて削除しますか？'
+    : 'この注文を削除しますか？';
+  if (!(await showConfirm(msg))) return;
+  for (const id of orderIds) {
+    orders = orders.filter(o => o.id !== id);
+    await deleteOrderRecord(id);
+  }
+  renderOrders();
+  renderToday();
+  renderTodayOnly();
+  renderCustomerCalendar();
+}
+
 let pendingShipDate = null;
 
 function applyPendingShipDate() {
@@ -3413,6 +3431,12 @@ function renderTodayOnly() {
       openOrderDetailModal(items[parseInt(btn.dataset.idx, 10)]);
     });
   });
+  itemWrap.querySelectorAll('.delete-ship-item-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const row = items[parseInt(btn.dataset.idx, 10)];
+      deleteShipItemRow(row.orderIds);
+    });
+  });
   itemWrap.querySelectorAll('.ship-sortable-th').forEach(th => {
     th.addEventListener('click', () => {
       const key = th.dataset.sortKey;
@@ -3449,6 +3473,7 @@ function renderDayItemTableHtml(dayIndex, items) {
         <th class="sortable-th ship-sortable-th" data-sort-key="customer">出荷先${arrow('customer')}</th>
         <th>状況</th>
         <th>詳細</th>
+        <th>削除</th>
       </tr></thead>
       <tbody>
         ${sortedItems.map((i) => {
@@ -3463,7 +3488,7 @@ function renderDayItemTableHtml(dayIndex, items) {
             const [, m, dd] = d.split('-').map(Number);
             return m + '/' + dd;
           }).join('・') || '-';
-          return `<tr><td data-label="品目">${escapeHtml(i.item)}</td><td data-label="数量">${i.qty}${escapeHtml(i.unit)}</td><td data-label="個数換算">${i.pieces !== null ? i.pieces + '個' : '-'}</td><td data-label="納品日">${deliveryDateLabel}</td><td data-label="出荷先">${escapeHtml(i.customerName)}</td><td data-label="状況">${statusCell}</td><td data-label="詳細"><button type="button" class="btn-ghost order-detail-btn" data-day="${dayIndex}" data-idx="${idx}">注文</button></td></tr>`;
+          return `<tr><td data-label="品目">${escapeHtml(i.item)}</td><td data-label="数量">${i.qty}${escapeHtml(i.unit)}</td><td data-label="個数換算">${i.pieces !== null ? i.pieces + '個' : '-'}</td><td data-label="納品日">${deliveryDateLabel}</td><td data-label="出荷先">${escapeHtml(i.customerName)}</td><td data-label="状況">${statusCell}</td><td data-label="詳細"><button type="button" class="btn-ghost order-detail-btn" data-day="${dayIndex}" data-idx="${idx}">注文</button></td><td data-label="削除"><button type="button" class="btn-ghost btn-danger delete-ship-item-btn" data-day="${dayIndex}" data-idx="${idx}">削除</button></td></tr>`;
         }).join('')}
       </tbody>
     </table>
@@ -3565,6 +3590,12 @@ function renderToday() {
     btn.addEventListener('click', () => {
       const row = dayItemsMap[btn.dataset.day][parseInt(btn.dataset.idx, 10)];
       openOrderDetailModal(row);
+    });
+  });
+  itemWrap.querySelectorAll('.delete-ship-item-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const row = dayItemsMap[btn.dataset.day][parseInt(btn.dataset.idx, 10)];
+      deleteShipItemRow(row.orderIds);
     });
   });
   itemWrap.querySelectorAll('.ship-sortable-th').forEach(th => {
