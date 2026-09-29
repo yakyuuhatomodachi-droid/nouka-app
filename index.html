@@ -1579,7 +1579,7 @@ document.querySelectorAll('input[name="invoice-date-basis"]').forEach(radio => {
   });
 });
 
-function renderInvoiceHtml({ customerName, customerZip, customerAddress, periodLabel, dueDate, lineItems }) {
+function renderInvoiceHtml({ customerName, customerZip, customerAddress, subject, dateBasis, dueDate, lineItems }) {
   const [ty, tm, td] = todayStr().split('-').map(Number);
   const [dy, dm, dd] = dueDate.split('-').map(Number);
 
@@ -1630,9 +1630,9 @@ function renderInvoiceHtml({ customerName, customerZip, customerAddress, periodL
         <div style="font-size:15px; font-weight:bold;">合計金額　${yen(grandTotal)}</div>
       </div>
       <div style="font-size:13px; margin-bottom:4px;">下記の通り、御請求申し上げます。</div>
-      <div style="font-size:13px; margin-bottom:4px;">件名：${escapeHtml(periodLabel)}納品分</div>
+      <div style="font-size:13px; margin-bottom:4px;">件名：${escapeHtml(subject)}</div>
       <div style="font-size:13px; margin-bottom:10px;">支払期限：${dy}年${dm}月${dd}日</div>
-      <div style="text-align:right; font-size:12px; margin-bottom:6px;">(税込) ※本請求は出荷日を基準として作成しております。</div>
+      <div style="text-align:right; font-size:12px; margin-bottom:6px;">(税込) ※本請求は${dateBasis === 'delivery' ? '納品日' : '出荷日'}を基準として作成しております。</div>
       <table style="width:100%; border-collapse:collapse; font-size:10px;">
         <thead>
           <tr style="background:#eee;">
@@ -1842,7 +1842,8 @@ document.getElementById('invoice-edit-create-btn').addEventListener('click', () 
     customerName,
     customerZip,
     customerAddress,
-    periodLabel: subject.replace(/(納品分|出荷分)$/, ''),
+    subject,
+    dateBasis: invoiceDateBasis,
     dueDate,
     lineItems
   });
