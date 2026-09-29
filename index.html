@@ -571,6 +571,20 @@
           <button type="button" class="btn btn-ghost" id="invoice-this-month-btn">今月(1日〜末日)</button>
         </div>
       </div>
+      <div class="field" style="margin-top: 6px;">
+        <label>集計基準</label>
+        <span class="hint">上の期間を「出荷日」と「納品日」のどちらで絞り込むか選べます</span>
+        <div class="form-row" style="margin-top: 6px;">
+          <label style="display:flex; align-items:center; gap:6px; font-weight:normal;">
+            <input type="radio" name="invoice-date-basis" id="invoice-basis-ship" value="ship">
+            出荷日ベース
+          </label>
+          <label style="display:flex; align-items:center; gap:6px; font-weight:normal;">
+            <input type="radio" name="invoice-date-basis" id="invoice-basis-delivery" value="delivery">
+            納品日ベース
+          </label>
+        </div>
+      </div>
     </div>
     <div class="card">
       <h2>対象取引先(請求書が必要な取引先)</h2>
@@ -1466,19 +1480,31 @@ function computeDueDate(periodEndDateStr) {
   return targetYear + '-' + pad2(targetMonth + 1) + '-' + pad2(lastDay);
 }
 
+let invoiceDateBasis = (localStorage.getItem('nouka_invoice_basis') === 'delivery') ? 'delivery' : 'ship';
+
+function setInvoiceDateBasis(basis) {
+  invoiceDateBasis = (basis === 'delivery') ? 'delivery' : 'ship';
+  try { localStorage.setItem('nouka_invoice_basis', invoiceDateBasis); } catch (e) { /* ignore */ }
+}
+
+function getInvoiceBasisDate(o, cust) {
+  if (invoiceDateBasis === 'delivery') return o.deliveryDate || o.date;
+  return calcShipDate(o.deliveryDate || o.date, cust ? cust.leadDays : 0);
+}
+
 function getInvoiceOrdersForCustomer(customerId, startDate, endDate) {
   const cust = customers.find(c => c.id === customerId);
   if (!cust) return [];
   return orders.filter(o => {
     if (o.customerId !== customerId) return false;
-    const sd = calcShipDate(o.deliveryDate || o.date, cust.leadDays);
-    return sd && sd >= startDate && sd <= endDate;
+    const bd = getInvoiceBasisDate(o, cust);
+    return bd && bd >= startDate && bd <= endDate;
   }).sort((a, b) => {
     const custA = customers.find(c => c.id === a.customerId);
     const custB = customers.find(c => c.id === b.customerId);
-    const sdA = calcShipDate(a.deliveryDate || a.date, custA ? custA.leadDays : 0);
-    const sdB = calcShipDate(b.deliveryDate || b.date, custB ? custB.leadDays : 0);
-    return sdA.localeCompare(sdB);
+    const bdA = getInvoiceBasisDate(a, custA);
+    const bdB = getInvoiceBasisDate(b, custB);
+    return bdA.localeCompare(bdB);
   });
 }
 
@@ -1542,6 +1568,16 @@ function setInvoicePeriodToThisMonth() {
 document.getElementById('invoice-this-month-btn').addEventListener('click', setInvoicePeriodToThisMonth);
 document.getElementById('invoice-start-date').addEventListener('change', renderInvoiceCustomerList);
 document.getElementById('invoice-end-date').addEventListener('change', renderInvoiceCustomerList);
+
+document.getElementById('invoice-basis-ship').checked = invoiceDateBasis === 'ship';
+document.getElementById('invoice-basis-delivery').checked = invoiceDateBasis === 'delivery';
+document.querySelectorAll('input[name="invoice-date-basis"]').forEach(radio => {
+  radio.addEventListener('change', (e) => {
+    if (!e.target.checked) return;
+    setInvoiceDateBasis(e.target.value);
+    renderInvoiceCustomerList();
+  });
+});
 
 function renderInvoiceHtml({ customerName, customerZip, customerAddress, periodLabel, dueDate, lineItems }) {
   const [ty, tm, td] = todayStr().split('-').map(Number);
@@ -1720,7 +1756,7 @@ function buildInvoiceEditRows(customerId, startDate, endDate, includeCasePack) {
   const cust = customers.find(c => c.id === customerId);
   const custOrders = getInvoiceOrdersForCustomer(customerId, startDate, endDate);
   return custOrders.map(o => {
-    const sd = calcShipDate(o.deliveryDate || o.date, cust.leadDays);
+    const sd = getInvoiceBasisDate(o, cust);
     const [, m, d] = sd.split('-').map(Number);
     const info = getDisplayQtyInfo(o, cust, includeCasePack);
     return {
@@ -1748,11 +1784,12 @@ function openInvoiceEditModal(customerId, startDate, endDate) {
   const periodLabel = (sy === ey && sm === em)
     ? `${sm}月${sd2}日〜${ed2}日`
     : `${sm}月${sd2}日〜${em}月${ed2}日`;
+  const periodSuffix = invoiceDateBasis === 'delivery' ? '納品分' : '出荷分';
 
   document.getElementById('invoice-edit-name').value = cust.name;
   document.getElementById('invoice-edit-zip').value = cust.zip || '';
   document.getElementById('invoice-edit-address').value = cust.address || '';
-  document.getElementById('invoice-edit-subject').value = periodLabel + '納品分';
+  document.getElementById('invoice-edit-subject').value = periodLabel + periodSuffix;
   document.getElementById('invoice-edit-duedate').value = computeDueDate(endDate);
   renderInvoiceEditItems(rows);
 
@@ -1805,7 +1842,7 @@ document.getElementById('invoice-edit-create-btn').addEventListener('click', () 
     customerName,
     customerZip,
     customerAddress,
-    periodLabel: subject.replace(/納品分$/, ''),
+    periodLabel: subject.replace(/(納品分|出荷分)$/, ''),
     dueDate,
     lineItems
   });
