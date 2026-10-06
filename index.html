@@ -762,7 +762,7 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="confirm-modal" style="display:none;">
+<div class="modal-overlay" id="confirm-modal" style="display:none; z-index:3000;">
   <div class="modal-box">
     <div class="modal-header">
       <h3>確認</h3>
@@ -874,27 +874,51 @@
 
 <script>
 // ---- 合言葉ゲート ----
-const SITE_PASSWORD = '@shishimi262320';
-const PASSWORD_STORAGE_KEY = 'nouka_unlocked';
+const PASSWORD_STORAGE_KEY = 'nouka_pw';
 
+function getStoredPassword() {
+  try { return localStorage.getItem(PASSWORD_STORAGE_KEY) || ''; } catch (e) { return ''; }
+}
+
+function showPasswordGate(showError) {
+  document.getElementById('password-gate').style.display = 'flex';
+  document.getElementById('password-gate-input').value = '';
+  const errorEl = document.getElementById('password-gate-error');
+  if (showError) errorEl.classList.add('show'); else errorEl.classList.remove('show');
+}
+
+// 合言葉の照合はサーバー(Apps Script)側で行う。この画面には合言葉を書かない
 (function initPasswordGate() {
   const gate = document.getElementById('password-gate');
-  if (localStorage.getItem(PASSWORD_STORAGE_KEY) === 'true') {
+  try { localStorage.removeItem('nouka_unlocked'); } catch (e) { /* ignore */ }
+  if (getStoredPassword()) {
     gate.style.display = 'none';
     return;
   }
   const input = document.getElementById('password-gate-input');
   const errorEl = document.getElementById('password-gate-error');
-  function trySubmit() {
-    if (input.value === SITE_PASSWORD) {
-      localStorage.setItem(PASSWORD_STORAGE_KEY, 'true');
-      gate.style.display = 'none';
-      errorEl.classList.remove('show');
-    } else {
+  const submitBtn = document.getElementById('password-gate-submit');
+  async function trySubmit() {
+    const pw = input.value;
+    if (!pw) return;
+    submitBtn.disabled = true;
+    try {
+      const res = await fetch(SHEET_API_URL + '?action=check&pw=' + encodeURIComponent(pw));
+      const data = await res.json();
+      if (data && data.ok === true) {
+        localStorage.setItem(PASSWORD_STORAGE_KEY, pw);
+        location.reload();
+        return;
+      }
+      errorEl.textContent = '合言葉が違います';
+      errorEl.classList.add('show');
+    } catch (e) {
+      errorEl.textContent = '確認できませんでした。通信状況をご確認ください';
       errorEl.classList.add('show');
     }
+    submitBtn.disabled = false;
   }
-  document.getElementById('password-gate-submit').addEventListener('click', trySubmit);
+  submitBtn.addEventListener('click', trySubmit);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') trySubmit(); });
 })();
 
@@ -1086,7 +1110,10 @@ function openOrderDetailModal(row) {
             <div><span class="label">納品日:</span> ${deliveryDate}</div>
             <div><span class="label">出荷日:</span> ${shipDate}</div>
           </div>
-          <button type="button" class="btn btn-ghost order-detail-edit-btn" data-id="${o.id}">この注文を編集</button>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" class="btn btn-ghost order-detail-edit-btn" data-id="${o.id}">この注文を編集</button>
+            <button type="button" class="btn btn-ghost btn-danger order-detail-delete-btn" data-id="${o.id}">この注文を削除</button>
+          </div>
         </div>
       `;
     }).join('');
@@ -1101,6 +1128,12 @@ function openOrderDetailModal(row) {
         closeOrderDetailModal();
         document.querySelector('.tab-btn[data-tab="orders"]').click();
         editOrder(btn.dataset.id);
+      });
+    });
+    body.querySelectorAll('.order-detail-delete-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const deleted = await deleteOrder(btn.dataset.id);
+        if (deleted) closeOrderDetailModal();
       });
     });
     document.getElementById('order-detail-deliverynote-btn').addEventListener('click', () => {
@@ -1896,50 +1929,51 @@ document.getElementById('save-status-modal').addEventListener('click', (e) => {
 // ---- データ保存先(Google スプレッドシート経由) ----
 const SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbwO0eugULTB1C-mQFNa8Bqx6TVGuczQcT0jpt08Zv0mw6EgAnClHUllOEAcSqWkHQ1uLQ/exec';
 
+function pwParam() { return '&pw=' + encodeURIComponent(getStoredPassword()); }
+
+function handleUnauthorized() {
+  try { localStorage.removeItem(PASSWORD_STORAGE_KEY); } catch (e) { /* ignore */ }
+  showPasswordGate(true);
+  const err = new Error('unauthorized');
+  err.unauthorized = true;
+  return err;
+}
+
+async function sheetFetchJson(query) {
+  const res = await fetch(SHEET_API_URL + '?' + query + pwParam());
+  if (!res.ok) throw new Error('通信に失敗しました(HTTP ' + res.status + ')');
+  const data = await res.json();
+  if (data && data.error === 'unauthorized') throw handleUnauthorized();
+  return data;
+}
+
 const sheetStorage = {
   async get(key) {
-    const res = await fetch(SHEET_API_URL + '?key=' + encodeURIComponent(key));
-    if (!res.ok) throw new Error('読み込みに失敗しました');
-    const data = await res.json();
+    const data = await sheetFetchJson('key=' + encodeURIComponent(key));
     if (data.value === null || data.value === undefined || data.value === '') {
       throw new Error('データが見つかりません');
     }
     return { key, value: data.value };
   },
   async set(key, value) {
-    const url = SHEET_API_URL + '?action=set&key=' + encodeURIComponent(key) + '&value=' + encodeURIComponent(value);
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('保存に失敗しました');
-    const data = await res.json();
+    const data = await sheetFetchJson('action=set&key=' + encodeURIComponent(key) + '&value=' + encodeURIComponent(value));
     if (!data.success) throw new Error('保存に失敗しました');
     return { key, value };
   },
   async del(key) {
-    const url = SHEET_API_URL + '?action=delete&key=' + encodeURIComponent(key);
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('削除に失敗しました');
-    const data = await res.json();
+    const data = await sheetFetchJson('action=delete&key=' + encodeURIComponent(key));
     if (!data.success) throw new Error('削除に失敗しました');
     return true;
   },
   async getAll() {
-    let res;
-    try {
-      res = await fetch(SHEET_API_URL + '?action=getAll');
-    } catch (e) {
-      console.error('getAll fetch network error:', e);
-      throw e;
-    }
-    if (!res.ok) {
-      console.error('getAll response not ok:', res.status, res.statusText);
-      throw new Error('読み込みに失敗しました(HTTP ' + res.status + ')');
-    }
-    const data = await res.json();
+    const data = await sheetFetchJson('action=getAll');
     return data.rows || [];
   }
 };
 
 async function loadData() {
+  const cachedCustomersBackup = customers;
+  const cachedOrdersBackup = orders;
   customers = [];
   orders = [];
   try {
@@ -1962,6 +1996,7 @@ async function loadData() {
     customers.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   } catch (e) {
     console.error('loadData failed:', e);
+    if (e && e.unauthorized) { customers = cachedCustomersBackup; orders = cachedOrdersBackup; return; }
     showSaveNote('データの読み込みに失敗しました: ' + e.message);
     customers = [];
     orders = [];
@@ -2726,13 +2761,14 @@ function editOrder(id) {
 }
 
 async function deleteOrder(id) {
-  if (!(await showConfirm('この注文記録を削除しますか？'))) return;
+  if (!(await showConfirm('この注文記録を削除しますか？'))) return false;
   orders = orders.filter(o => o.id !== id);
   await deleteOrderRecord(id);
   renderOrders();
   renderToday();
   renderTodayOnly();
   renderCustomerCalendar();
+  return true;
 }
 
 async function deleteShipItemRow(orderIds) {
