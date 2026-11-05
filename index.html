@@ -417,7 +417,7 @@
         <div class="weekday-checks">
           <label class="weekday-check"><input type="checkbox" id="c-needs-delivery-note">納品書が必要</label>
           <label class="weekday-check"><input type="checkbox" id="c-needs-invoice">請求書が必要</label>
-          <label class="weekday-check"><input type="checkbox" id="c-show-invoice-number">請求書にインボイス登録番号を載せる</label>
+          <label class="weekday-check"><input type="checkbox" id="c-show-invoice-number" checked>請求書にインボイス登録番号を載せる</label>
         </div>
       </div>
       <div class="field" style="margin-bottom: 10px; max-width: 260px;">
@@ -848,7 +848,7 @@
     </div>
     <label class="weekday-check" style="width:100%; box-sizing:border-box; justify-content:flex-start; margin-bottom:10px;">
       <input type="checkbox" id="invoice-edit-show-invoice-number">
-      インボイス登録番号を請求書に載せる(取引先ごとの設定が初期値です)
+      インボイス登録番号を請求書に載せる(取引先ごとの設定が初期値です)<span id="invoice-edit-invoice-number-note" style="color:var(--danger); margin-left:6px;"></span>
     </label>
     <label class="weekday-check" style="width:100%; box-sizing:border-box; justify-content:flex-start; margin-bottom:10px;">
       <input type="checkbox" id="invoice-edit-include-casepack" checked>
@@ -1838,7 +1838,8 @@ function openInvoiceEditModal(customerId, startDate, endDate) {
   document.getElementById('invoice-edit-duedate').value = computeDueDate(endDate);
   renderInvoiceEditItems(rows);
 
-  document.getElementById('invoice-edit-show-invoice-number').checked = !!cust.showInvoiceNumber;
+  document.getElementById('invoice-edit-show-invoice-number').checked = cust.showInvoiceNumber !== false;
+  document.getElementById('invoice-edit-invoice-number-note').textContent = companyInfo.invoiceNumber ? '' : '(マスタタブで登録番号を登録すると載ります)';
   invoiceEditContext = { customerId, customerName: cust.name, startDate, endDate };
   document.getElementById('invoice-edit-modal').style.display = 'flex';
 }
@@ -1870,7 +1871,6 @@ document.getElementById('invoice-edit-create-btn').addEventListener('click', () 
   const subject = document.getElementById('invoice-edit-subject').value.trim();
   const dueDate = document.getElementById('invoice-edit-duedate').value;
   if (!customerName) { showSaveNote('宛先名を入力してください'); return; }
-  if (document.getElementById('invoice-edit-show-invoice-number').checked && !companyInfo.invoiceNumber) { showSaveNote('マスタタブで、インボイス登録番号を先に登録してください'); return; }
   if (!dueDate) { showSaveNote('支払期限を入力してください'); return; }
 
   const rawItems = readInvoiceEditItemsFromDOM();
@@ -2543,7 +2543,7 @@ function editCustomer(id) {
   });
   document.getElementById('c-needs-delivery-note').checked = !!c.needsDeliveryNote;
   document.getElementById('c-needs-invoice').checked = !!c.needsInvoice;
-  document.getElementById('c-show-invoice-number').checked = !!c.showInvoiceNumber;
+  document.getElementById('c-show-invoice-number').checked = c.showInvoiceNumber !== false;
   document.getElementById('c-qty-display').value = c.quantityUnit === 'piece' ? 'piece' : 'box';
   const rows = itemSettingsToRows(c);
   renderItemSettingsRows(rows);
@@ -2610,7 +2610,7 @@ document.getElementById('c-submit').addEventListener('click', async () => {
   document.querySelectorAll('.c-weekday').forEach(cb => { cb.checked = false; });
   document.getElementById('c-needs-delivery-note').checked = false;
   document.getElementById('c-needs-invoice').checked = false;
-  document.getElementById('c-show-invoice-number').checked = false;
+  document.getElementById('c-show-invoice-number').checked = true;
   document.getElementById('c-qty-display').value = 'box';
   renderItemSettingsRows([]);
   const ok = await saveCustomer(savedCustomer);
