@@ -1391,8 +1391,8 @@ function renderDeliveryNoteHtml({ customerName, customerZip, customerAddress, su
       </div>
       <h1 style="text-align:center; font-size:26px; letter-spacing: 14px; margin: 20px 0 20px;">納 品 書</h1>
       <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom: 16px;">
-        <div style="font-size:15px; line-height:1.6;">
-          ${escapeHtml(customerName)} 御中<br>
+        <div style="font-size:14px; line-height:1.6;">
+          <span style="font-size:21px; font-weight:bold; line-height:1.5;">${escapeHtml(customerName)} 御中</span><br>
           ${customerZip ? '〒' + escapeHtml(customerZip) + '<br>' : ''}
           ${escapeHtml(customerAddress || '')}
         </div>
@@ -1667,8 +1667,8 @@ function renderInvoiceHtml({ customerName, customerZip, customerAddress, subject
       </div>
       <h1 style="text-align:center; font-size:26px; letter-spacing: 14px; margin: 20px 0 20px;">御 請 求 書</h1>
       <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom: 16px;">
-        <div style="font-size:15px; line-height:1.6;">
-          ${escapeHtml(customerName)} 御中<br>
+        <div style="font-size:14px; line-height:1.6;">
+          <span style="font-size:21px; font-weight:bold; line-height:1.5;">${escapeHtml(customerName)} 御中</span><br>
           ${customerZip ? '〒' + escapeHtml(customerZip) + '<br>' : ''}
           ${escapeHtml(customerAddress || '')}
         </div>
